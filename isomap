@@ -1,0 +1,304 @@
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <Eigen/Dense>
+#include <Eigen/Eigenvalues>
+#include <vector>
+#include <cmath>
+#include <iomanip>
+using namespace std;
+using namespace Eigen;
+
+
+int CountLines(char *filename)
+{
+    //defin the countlines
+    ifstream ReadFile;
+    int n = 0;
+    string temp;
+    ReadFile.open(filename,ios::in);
+    if (ReadFile.fail())
+    {
+        cout << "open file fail!" << endl;
+    }
+    
+    else
+    {
+        while (getline(ReadFile,temp))
+        {
+            n++;
+        }
+        return n;
+    }
+    ReadFile.close();
+}
+
+int CountRows(char *filename)
+{
+    ifstream ReadFile;
+    string temp;
+    vector <float> lines;
+    float feat_onePoint;
+    int n;
+
+    ReadFile.open(filename,ios::in);
+    if (ReadFile.fail())
+    {
+        cout << "open file fail!" << endl;
+    }
+    
+    else
+    {
+        for (int i = 0; i < 1; i++)
+        {
+            getline(ReadFile,temp);
+            stringstream stringin(temp); 
+		    lines.clear();
+            while (stringin >> feat_onePoint) 
+            {      
+			    lines.push_back(feat_onePoint);
+		    }            
+        }
+        n = lines.size();
+        return n;
+    }
+    ReadFile.close();
+}
+
+Matrix<double, Dynamic, Dynamic> ReadMatrix()
+{
+    //get matrix form file
+    char filename[512];
+    cout << "please input the name of file you want to open!" << endl;
+    cin >> filename;
+    ifstream in(filename,ios::in);
+    string line_info,input_result;
+    
+    int Lines;
+    int Rows;
+    Lines = CountLines(filename); // get lines of files
+    Rows = CountRows(filename);
+    int row_num = Lines;
+    int col_num = Rows;
+    Matrix<double, Dynamic, Dynamic> matrix_dynamic(row_num,col_num);// buliding a dynamic matrix.
+    
+    if(!in)
+    {
+        cout << "no such file!" << endl;
+    }
+
+    else
+    {   
+     
+        for (int i = 0; getline(in,line_info); i++)
+        {
+            stringstream input(line_info);
+            for (int j = 0; input >> input_result; j++)
+            {
+                string::size_type size;
+                matrix_dynamic(i,j) = stod(input_result,&size);//?
+
+            }
+        }
+    }
+    
+    cout.setf(ios::fixed);// keep precision.
+    cout << "matrix_dynamic" << endl;
+    cout << setprecision(8) << matrix_dynamic << endl;
+    return matrix_dynamic;
+}
+
+void sortEigenVectorByValues(Matrix<double, Dynamic, 1> &eigenValues, Matrix<double, Dynamic, Dynamic> &eigenVectors) 
+{
+	vector<tuple<double, Matrix<double, Dynamic, Dynamic>>> eigenValueAndVector;//?
+	int size = static_cast<int>(eigenValues.size());
+	
+	eigenValueAndVector.reserve(size);
+	for (int i = 0; i < size; ++i)
+		eigenValueAndVector.push_back(tuple<double, Matrix<double, Dynamic, Dynamic>> (eigenValues[i], eigenVectors.col(i)));//?
+	
+	// sorting eigenvalues and eigenvectors.
+	sort(eigenValueAndVector.begin(), eigenValueAndVector.end(),
+		[&](const tuple<double, Matrix<double, Dynamic, Dynamic>> &a, const tuple<double, Matrix<double, Dynamic, Dynamic>> &b) -> bool 
+        {
+		return get<0>(a) > get<0>(b);//set low -> high or high -> low
+		});
+	
+	for (int i = 0; i < size; ++i) {
+		eigenValues[i] = get<0>(eigenValueAndVector[i]); //eigenvalues afer sorting.
+		eigenVectors.col(i).swap(get<1>(eigenValueAndVector[i])); //eigenvectors after sorting.
+	}
+    
+}
+
+void sort_vec( const VectorXd& vec, VectorXd &sorted_vec,  VectorXi &ind)
+{
+  ind=VectorXi::LinSpaced(vec.size(),0,vec.size()-1);//[0 1 2 3 ... N-1]
+  
+  auto rule=[vec](int i, int j)->bool
+  {
+    return vec(i)<vec(j);// set low -> high or high -> low
+  };
+
+  sort(ind.data(),ind.data()+ind.size(),rule);
+  sorted_vec.resize(vec.size());
+
+  for(int i=0;i<vec.size();i++)
+  {
+    sorted_vec(i)=vec(ind(i));
+  }
+}
+
+Matrix<double, Dynamic, Dynamic> floyd(Matrix<double, Dynamic, Dynamic> D,int n_neighbors)
+{
+    double Max;;
+    int m,n,k;
+    Max = D.maxCoeff();
+    m = D.rows();
+    n = D.cols();
+    k = n_neighbors;
+    MatrixXd D1 = MatrixXd::Ones(m,m);
+    D1 = D1 * Max * 1000;
+    Matrix<int, Dynamic, Dynamic> D_arg(m,n),temp_mat;
+
+     for (int i = 0; i < m; i++)
+    {
+        VectorXd vec;
+        VectorXi ind;
+        VectorXd sorted_vec;
+        vec = D.row(i);
+        sort_vec(vec,sorted_vec,ind);
+        D_arg.row(i)= ind.transpose();
+    }
+
+    if ( 0 < k < n)
+    {
+        for (int i = 0; i < m; i++)
+        {
+            for (int j = 0; j < k; j++)
+            {
+                D1.row(i)(D_arg.row(i).leftCols(k)(j)) = D.row(i)(D_arg.row(i).leftCols(k)(j));
+            }  
+        }
+    }
+
+    else
+    {
+        "n_neighbors is worng!";
+    }
+
+    for (int k = 0; k < m; k++)
+    {
+        for (int i = 0; i < m; i++)
+        {
+            for (int j = 0; j < m; j++)
+            {
+                if (D1(i,k)+D1(k,j) < D1(i,j))
+                {
+                    D1(i,j) = D1(i,k)+D1(k,j);
+                }
+            }
+        }
+    }
+    return D1;
+}
+
+Matrix<double, Dynamic, Dynamic> cal_pairwise_dist(Matrix<double, Dynamic, Dynamic> x)
+{
+    Matrix<double, Dynamic, Dynamic> sum_x,Temp_Matrix,dist;
+    sum_x = x.cwiseProduct(x).rowwise().sum();//sum_x = np.sum(np.square(x), 1)
+    Temp_Matrix = -2*(x*x.transpose());
+
+    for (int i = 0; i < Temp_Matrix.rows(); i++)
+    {
+        Temp_Matrix.row(i) += sum_x.transpose();
+    }
+
+    dist = Temp_Matrix.transpose();
+
+    for (int j = 0; j < dist.rows(); j++)
+    {
+        dist.row(j) += sum_x.transpose();
+    }//dist = np.add(np.add(-2 * np.dot(x, x.T), sum_x).T, sum_x)
+    
+    return dist;
+}
+
+Matrix<double, Dynamic, Dynamic> mds(Matrix<double, Dynamic, Dynamic> dist,int n_dims)
+{
+    //dist is a matrix form floyd,n_dims is the aim dimension.
+    int n = dist.row(0).cols(); 
+    MatrixXd T1 = MatrixXd::Ones(n,n);
+    Matrix<double, Dynamic, Dynamic> T2,T3,B,eigenvectors,
+    eigenvalues,eigenvectors_dims,eigenvalues_dims,Z;
+    dist = dist.cwiseProduct(dist);
+    T1 = T1*dist.sum()/pow(n,2);
+    T2 = dist.rowwise().sum().transpose()/n;
+    T3 = dist.colwise().sum()/n;
+
+
+    for (int i = 0; i < T1.rows(); i++)
+    {
+        T1.row(i) = T1.row(i) - T2 -T3;
+    }
+    B = -(T1 + dist)/2;
+ 
+    EigenSolver<Matrix<double, Dynamic, Dynamic>> solver(B);
+    Matrix<double, Dynamic, 1> eigenValues = solver.pseudoEigenvalueMatrix().diagonal();
+    Matrix<double, Dynamic, Dynamic> eigenVectors = -(solver.pseudoEigenvectors());
+    sortEigenVectorByValues(eigenValues, eigenVectors);
+    eigenvalues_dims = eigenValues.segment(0,n_dims).array().sqrt();
+    eigenvectors_dims = eigenVectors.leftCols(n_dims);
+
+    for (int i = 0; i < eigenvectors_dims.cols(); i++)
+    {
+        eigenvectors_dims.col(i)  *= eigenvalues_dims(i) ;
+    }
+    Z = eigenvectors_dims;
+    return Z;
+}
+
+int isomap(Matrix<double, Dynamic, Dynamic> data,int n_dims,int n_neighbors)
+{
+
+    // data is o_matrix
+    Matrix<double, Dynamic, Dynamic> D,D_floyd,data_n;
+    D = cal_pairwise_dist(data);
+    int n ,m;
+    m = D.rows();
+    n = D.cols();
+    for (int i = 0; i < m; i++)
+    {
+        for (int j = 0; j < n; j++)
+        {
+            if (D(i,j) < 0)
+            {
+                D(i,j) = 0;
+            }
+        }  
+    }
+
+    D = D.array().sqrt();
+    //cout << "D**2" << endl;
+    //cout << D << endl;
+    D_floyd = floyd(D, n_neighbors);
+    //cout << "D_floyd" << endl;
+    //cout << D_floyd << endl;
+    data_n = mds(D_floyd,n_dims);
+    cout << "result" << endl;
+    cout << data_n << endl;
+    return 0;
+}
+
+
+int main()
+{
+
+    Matrix<double, Dynamic, Dynamic> o_matrix;
+    int n_dims = 2;
+    int n_neighbors = 3;//if n_neighbors is 2 in python ,n_neighbors is 3 in c++.
+    cout << "n_dims is:\t" << n_dims << "n_neighbors is:" << n_neighbors << endl;
+    o_matrix = ReadMatrix();
+    isomap(o_matrix,n_dims,n_neighbors);
+    return 0;
+}
