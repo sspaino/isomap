@@ -108,29 +108,6 @@ Matrix<double, Dynamic, Dynamic> ReadMatrix()
     return matrix_dynamic;
 }
 
-void sortEigenVectorByValues(Matrix<double, Dynamic, 1> &eigenValues, Matrix<double, Dynamic, Dynamic> &eigenVectors) 
-{
-	vector<tuple<double, Matrix<double, Dynamic, Dynamic>>> eigenValueAndVector;//?
-	int size = static_cast<int>(eigenValues.size());
-	
-	eigenValueAndVector.reserve(size);
-	for (int i = 0; i < size; ++i)
-		eigenValueAndVector.push_back(tuple<double, Matrix<double, Dynamic, Dynamic>> (eigenValues[i], eigenVectors.col(i)));//?
-	
-	// sorting eigenvalues and eigenvectors.
-	sort(eigenValueAndVector.begin(), eigenValueAndVector.end(),
-		[&](const tuple<double, Matrix<double, Dynamic, Dynamic>> &a, const tuple<double, Matrix<double, Dynamic, Dynamic>> &b) -> bool 
-        {
-		return get<0>(a) > get<0>(b);//set low -> high or high -> low
-		});
-	
-	for (int i = 0; i < size; ++i) {
-		eigenValues[i] = get<0>(eigenValueAndVector[i]); //eigenvalues afer sorting.
-		eigenVectors.col(i).swap(get<1>(eigenValueAndVector[i])); //eigenvectors after sorting.
-	}
-    
-}
-
 void sort_vec( const VectorXd& vec, VectorXd &sorted_vec,  VectorXi &ind)
 {
   ind=VectorXi::LinSpaced(vec.size(),0,vec.size()-1);//[0 1 2 3 ... N-1]
@@ -245,8 +222,8 @@ Matrix<double, Dynamic, Dynamic> mds(Matrix<double, Dynamic, Dynamic> dist,int n
  
     EigenSolver<Matrix<double, Dynamic, Dynamic>> solver(B);
     Matrix<double, Dynamic, 1> eigenValues = solver.pseudoEigenvalueMatrix().diagonal();
-    Matrix<double, Dynamic, Dynamic> eigenVectors = -(solver.pseudoEigenvectors());
-    sortEigenVectorByValues(eigenValues, eigenVectors);
+    Matrix<double, Dynamic, Dynamic> eigenVectors = solver.pseudoEigenvectors();
+    
     eigenvalues_dims = eigenValues.segment(0,n_dims).array().sqrt();
     eigenvectors_dims = eigenVectors.leftCols(n_dims);
 
